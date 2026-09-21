@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A次元 & 写像 P シミュレーション</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        canvas {
+            background-color: #0f172a;
+            display: block;
+            touch-action: none;
+        }
+        .btn-active {
+            box-shadow: 0 0 18px rgba(59, 130, 246, 0.6);
+            border-color: #60a5fa !important;
+            background-color: #1e293b !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+    <!-- Header Section -->
+    <header class="bg-slate-900 border-b border-slate-800 p-4 shadow-md">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-amber-400">
+                    Self & Ego シミュレーション (A次元)
+                </h1>
+                <p class="text-xs text-slate-400">写像 P_n とバネ構造による移動プロセス</p>
+            </div>
+            <div id="statusBadge" class="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="statusText">モード: 待機中 (現在の状態: W₁)</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Canvas & Interactive Controls -->
+    <main class="flex-1 flex flex-col justify-center items-center p-2 sm:p-4 w-full max-w-5xl mx-auto">
+        <!-- Canvas Container -->
+        <div class="relative w-full aspect-[4/3] max-h-[60vh] bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center">
+            <canvas id="simCanvas" class="w-full h-full cursor-crosshair"></canvas>
+
+            <!-- Toast / Notification Banner -->
+            <div id="canvasToast" class="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 font-bold border border-amber-300 px-5 py-2.5 rounded-xl text-sm pointer-events-none opacity-0 transition-all duration-300 backdrop-blur-md shadow-xl text-center z-20">
+                メッセージ
+            </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="w-full mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button id="btnSelf" onclick="setMode('self')" class="flex items-center justify-center gap-3 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all p-4 rounded-xl border border-slate-700 text-left group">
+                <div class="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-circle-plus"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-slate-200">1. Self ボタン</div>
+                    <div class="text-xs text-slate-400" id="selfBtnDesc">ゴール W₂ を配置</div>
+                </div>
+            </button>
+
+            <button id="btnEgo" onclick="setMode('ego')" class="flex items-center justify-center gap-3 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all p-4 rounded-xl border border-slate-700 text-left group">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-infinity"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-slate-200">2. Ego ボタン</div>
+                    <div class="text-xs text-slate-400">ドラッグでバネを装着</div>
+                </div>
+            </button>
+
+            <button id="btnReset" onclick="resetSimulation()" class="flex items-center justify-center gap-3 bg-slate-800 hover:bg-red-950/40 border-slate-700 hover:border-red-800 active:scale-95 transition-all p-4 rounded-xl border text-left group">
+                <div class="w-10 h-10 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold group-hover:rotate-180 transition-transform duration-500">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-slate-200">リセット</div>
+                    <div class="text-xs text-slate-400">W₁ (初期状態) に戻す</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Slider & Info Footer -->
+        <div class="w-full mt-3 bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4 w-full md:w-auto">
+                <label class="whitespace-nowrap font-medium text-slate-300">バネの自然長 (閾値):</label>
+                <input type="range" id="restLengthSlider" min="40" max="180" step="5" value="80" class="w-full md:w-36 accent-amber-500 cursor-pointer">
+                <span id="restLengthVal" class="font-mono text-amber-400 w-8 text-right">80</span>
+            </div>
+            <div class="text-center md:text-right">
+                <p>💡 ゴール到達で番号が繰り上がり、<span class="font-semibold text-amber-300">W₁ → W₂</span>、写像が <span class="font-semibold text-blue-300">P₁ → P₂</span> に変化します。</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-900 border-t border-slate-800 p-3 text-center text-xs text-slate-500">
+        Interactive Spring Physics & Projection Mapping Game
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const toast = document.getElementById('canvasToast');
+
+        // Sequence Index Tracker
+        let currentIndex = 1; 
+        let currentMode = 'none'; // 'none', 'self', 'ego'
+        let origin = { x: 80, y: 0 }; // Axis origin on canvas
+        
+        // Dynamic Node Positions
+        let currentW = { x: 200, y: 220, vx: 0, vy: 0, radius: 20 };
+        let targetW = null; // Goal node object
+        let springAttached = false;
+        
+        // Dragging state for Ego mode
+        let isDraggingSpring = false;
+        let dragPos = { x: 0, y: 0 };
+
+        // Spring Physics Parameters
+        let stiffness = 0.0018;     // Low tension speed for slow smooth approach
+        let damping = 0.82;         // Damping prevents overshooting
+        let restLength = 80;        // Distance below which spring tension is 0
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            origin.y = rect.height - 80;
+            
+            if (currentW.y > origin.y - 40) {
+                currentW.y = origin.y - 180;
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        let toastTimeout;
+        function showToast(msg, isWarning = false) {
+            toast.textContent = msg;
+            if (isWarning) {
+                toast.className = "absolute top-4 left-1/2 -translate-x-1/2 bg-rose-600 text-white font-bold border border-rose-300 px-5 py-2.5 rounded-xl text-sm pointer-events-none opacity-100 transition-all duration-300 backdrop-blur-md shadow-xl text-center scale-105 z-20";
+            } else {
+                toast.className = "absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 font-bold border border-amber-300 px-5 py-2.5 rounded-xl text-sm pointer-events-none opacity-100 transition-all duration-300 backdrop-blur-md shadow-xl text-center z-20";
+            }
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 3200);
+        }
+
+        function updateUIControls() {
+            document.getElementById('selfBtnDesc').textContent = `ゴール W${currentIndex + 1} を配置`;
+
+            const statusText = document.getElementById('statusText');
+            if (currentMode === 'self') {
+                statusText.textContent = `Selfモード: ゴール W${currentIndex + 1} の場所を設定中`;
+            } else if (currentMode === 'ego') {
+                if (isDraggingSpring) {
+                    statusText.textContent = `Egoモード: W${currentIndex} の上で指・マウスを離してください`;
+                } else {
+                    statusText.textContent = `Egoモード: ゴール W${currentIndex + 1} から W${currentIndex} へドラッグ`;
+                }
+            } else {
+                statusText.textContent = `待機中 (現在の位置: W${currentIndex})`;
+            }
+        }
+
+        function setMode(mode) {
+            if (currentMode === mode) {
+                currentMode = 'none';
+                isDraggingSpring = false;
+            } else {
+                currentMode = mode;
+                isDraggingSpring = false;
+            }
+
+            document.getElementById('btnSelf').classList.toggle('btn-active', currentMode === 'self');
+            document.getElementById('btnEgo').classList.toggle('btn-active', currentMode === 'ego');
+
+            if (currentMode === 'self') {
+                showToast(`キャンバス上をタップして ゴール W${currentIndex + 1} を配置してください`);
+            } else if (currentMode === 'ego') {
+                if (!targetW) {
+                    showToast(`先に [Self] ボタンで ゴール W${currentIndex + 1} を配置してください`);
+                } else {
+                    showToast(`ゴール W${currentIndex + 1} から W${currentIndex} まで指で伸ばしてください`);
+                }
+            }
+            updateUIControls();
+        }
+
+        function resetSimulation() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            currentIndex = 1;
+            currentW = { x: rect.width * 0.25, y: origin.y - 180, vx: 0, vy: 0, radius: 20 };
+            targetW = null;
+            springAttached = false;
+            isDraggingSpring = false;
+            setMode('none');
+            showToast("W₁ (初期状態) にリセットしました");
+        }
+
+        function getCanvasCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : (e.clientX || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0));
+            const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : (e.clientY || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0));
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function handlePointerDown(e) {
+            const pos = getCanvasCoordinates(e);
+
+            if (currentMode === 'self') {
+                if (pos.y < origin.y - 20) {
+                    targetW = { x: pos.x, y: pos.y, radius: 20 };
+                    springAttached = false;
+                    isDraggingSpring = false;
+                    showToast(`ゴール W${currentIndex + 1} を配置しました。[Ego] でバネを張れます`);
+                }
+            } else if (currentMode === 'ego') {
+                if (!targetW) {
+                    showToast(`先に ゴール W${currentIndex + 1} を配置してください`);
+                    return;
+                }
+
+                // Drag start check from targetW (W_n+1)
+                const distToTarget = Math.hypot(pos.x - targetW.x, pos.y - targetW.y);
+                if (distToTarget <= targetW.radius + 18) {
+                    isDraggingSpring = true;
+                    dragPos = { x: pos.x, y: pos.y };
+                    updateUIControls();
+                } else {
+                    showToast(`ゴール W${currentIndex + 1} の上を押してドラッグを開始してください`);
+                }
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (isDraggingSpring) {
+                if (e.cancelable) e.preventDefault();
+                dragPos = getCanvasCoordinates(e);
+            }
+        }
+
+        function handlePointerUp(e) {
+            if (isDraggingSpring) {
+                const pos = getCanvasCoordinates(e);
+                const distToCurrent = Math.hypot(pos.x - currentW.x, pos.y - currentW.y);
+
+                if (distToCurrent <= currentW.radius + 22) {
+                    // Distance check from W_n+1 to W_n
+                    const goalDist = Math.hypot(targetW.x - currentW.x, targetW.y - currentW.y);
+
+                    if (goalDist <= restLength) {
+                        // Too close: reject spring attachment and keep W_n unchanged
+                        springAttached = false;
+                        showToast("ゴールが近過ぎます。現状の外に設定しましょう", true);
+                    } else {
+                        // Far enough: attach spring successfully
+                        springAttached = true;
+                        setMode('none');
+                        showToast(`バネを掛けました！W${currentIndex} が W${currentIndex + 1} に引き寄せられます`);
+                    }
+                } else {
+                    showToast(`W${currentIndex} の上で離さなかったため、バネが届きませんでした`);
+                }
+
+                isDraggingSpring = false;
+                updateUIControls();
+            }
+        }
+
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        canvas.addEventListener('touchstart', (e) => {
+            handlePointerDown(e);
+        }, { passive: false });
+        
+        window.addEventListener('touchmove', (e) => {
+            handlePointerMove(e);
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            handlePointerUp(e);
+        });
+
+        const slider = document.getElementById('restLengthSlider');
+        const sliderVal = document.getElementById('restLengthVal');
+        slider.addEventListener('input', (e) => {
+            restLength = parseFloat(e.target.value);
+            sliderVal.textContent = restLength;
+        });
+
+        function updatePhysics() {
+            if (springAttached && targetW) {
+                const dx = targetW.x - currentW.x;
+                const dy = targetW.y - currentW.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance > restLength) {
+                    const stretch = distance - restLength;
+                    const tension = stretch * stiffness;
+
+                    const fx = (dx / distance) * tension;
+                    const fy = (dy / distance) * tension;
+
+                    currentW.vx += fx;
+                    currentW.vy += fy;
+                }
+
+                // Damping force to prevent overshooting
+                currentW.vx *= damping;
+                currentW.vy *= damping;
+
+                if (Math.abs(currentW.vx) < 0.001) currentW.vx = 0;
+                if (Math.abs(currentW.vy) < 0.001) currentW.vy = 0;
+
+                currentW.x += currentW.vx;
+                currentW.y += currentW.vy;
+
+                // Level evolution upon reaching goal
+                if (distance <= restLength + 2 && Math.hypot(currentW.vx, currentW.vy) < 0.05) {
+                    currentIndex++;
+                    showToast(`W${currentIndex - 1} は W${currentIndex} へ、写像 P${currentIndex - 1} は P${currentIndex} に進化しました！`);
+                    targetW = null; // Goal dissolves into main node
+                    springAttached = false;
+                    setMode('none');
+                }
+            }
+        }
+
+        function drawSpring(x1, y1, x2, y2, isSlacked) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx);
+
+            ctx.save();
+            ctx.translate(x1, y1);
+            ctx.rotate(angle);
+
+            // Translucent backdrop band
+            ctx.beginPath();
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = isSlacked ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.15)';
+            ctx.lineCap = 'round';
+            ctx.moveTo(0, 0);
+            ctx.lineTo(dist, 0);
+            ctx.stroke();
+
+            // Zigzag spring curve
+            ctx.beginPath();
+            ctx.lineWidth = 3.5;
+            ctx.strokeStyle = isSlacked ? '#10b981' : '#f59e0b';
+            ctx.lineJoin = 'round';
+
+            const coils = Math.max(6, Math.floor(dist / 14));
+            const coilWidth = 12;
+            ctx.moveTo(0, 0);
+
+            for (let i = 0; i <= coils; i++) {
+                const px = (dist / coils) * i;
+                let py = 0;
+                if (i > 0 && i < coils) {
+                    py = (i % 2 === 0 ? 1 : -1) * coilWidth;
+                }
+                ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function draw() {
+            const width = canvas.parentElement.getBoundingClientRect().width;
+            const height = canvas.parentElement.getBoundingClientRect().height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Graph Axis
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+
+            // Vertical Axis (A次元)
+            const axisX = origin.x;
+            ctx.beginPath();
+            ctx.moveTo(axisX, origin.y);
+            ctx.lineTo(axisX, 40);
+            ctx.stroke();
+
+            // Arrow Head
+            ctx.beginPath();
+            ctx.fillStyle = '#334155';
+            ctx.moveTo(axisX - 8, 45);
+            ctx.lineTo(axisX, 30);
+            ctx.lineTo(axisX + 8, 45);
+            ctx.fill();
+
+            // Horizontal Axis Line
+            ctx.beginPath();
+            ctx.moveTo(axisX, origin.y);
+            ctx.lineTo(width - 30, origin.y);
+            ctx.stroke();
+
+            // Arrow Head
+            ctx.beginPath();
+            ctx.moveTo(width - 35, origin.y - 8);
+            ctx.lineTo(width - 20, origin.y);
+            ctx.lineTo(width - 35, origin.y + 8);
+            ctx.fill();
+
+            // Axis Text Label
+            ctx.font = 'bold 18px Inter, sans-serif';
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillText('A次元', axisX - 35, 30);
+
+            // 2. Projection Line & Projection Point P_n
+            const p = { x: currentW.x, y: origin.y };
+
+            ctx.beginPath();
+            ctx.setLineDash([6, 6]);
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(currentW.x, currentW.y);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Projection Point P_n
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 14, 6, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#1e293b';
+            ctx.fill();
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // P_n Text
+            ctx.font = 'bold 16px Inter, sans-serif';
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillText(`P${currentIndex}`, p.x - 8, p.y + 28);
+
+            // 3. Render Spring
+            if (springAttached && targetW) {
+                const dist = Math.hypot(targetW.x - currentW.x, targetW.y - currentW.y);
+                drawSpring(currentW.x, currentW.y, targetW.x, targetW.y, dist <= restLength);
+            } else if (isDraggingSpring && targetW) {
+                drawSpring(targetW.x, targetW.y, dragPos.x, dragPos.y, false);
+            }
+
+            // 4. Main Node W_n
+            ctx.beginPath();
+            ctx.arc(currentW.x, currentW.y, currentW.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#0284c7';
+            ctx.fill();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.font = 'bold 16px Inter, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(`W${currentIndex}`, currentW.x - 10, currentW.y - 28);
+
+            // Drag indicator ring
+            if (isDraggingSpring) {
+                const distToW = Math.hypot(dragPos.x - currentW.x, dragPos.y - currentW.y);
+                if (distToW <= currentW.radius + 22) {
+                    ctx.beginPath();
+                    ctx.arc(currentW.x, currentW.y, currentW.radius + 10, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // 5. Goal Node W_n+1
+            if (targetW) {
+                ctx.beginPath();
+                ctx.arc(targetW.x, targetW.y, targetW.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#d97706';
+                ctx.fill();
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.font = 'bold 16px Inter, sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(`W${currentIndex + 1}`, targetW.x - 10, targetW.y - 28);
+            }
+        }
+
+        function animate() {
+            updatePhysics();
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        window.onload = function() {
+            resizeCanvas();
+            resetSimulation();
+            animate();
+        };
+    </script>
+</body>
+</html>
